@@ -1,0 +1,17 @@
+config.local.psd1
+*.local.*
+.local*
+.runtime/
+*.log
+*.clixml
+*.zip
+*.iso
+*.vhd
+*.vhdx
+*.msi
+*.exe
+*.pfx
+*.key
+*.csv
+*.bak
+*.bicep.json

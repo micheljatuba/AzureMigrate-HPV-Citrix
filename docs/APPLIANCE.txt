@@ -1,0 +1,77 @@
+AZURE MIGRATE: HYPER-V DISCOVERY, NOT PHYSICAL
+=============================================
+
+Optional, explicitly interactive finishing steps
+------------------------------------------------
+1. Before installation, read the current Microsoft requirements/terms. In the
+   private config set Appliance.Enabled=$true, the official installer URL and
+   an independently obtained current installer SHA256. The moving URL is:
+   https://go.microsoft.com/fwlink/?linkid=2191847
+   This is Microsoft's MULTI-SCENARIO installer, not a Physical-only installer.
+
+2. Run the repository's single Install command. Wait for LabReady-
+   ApplianceManualSetup and healthy guest checks. "Healthy" for MIG01 means
+   the VM/media prerequisites are ready, NOT that Migrate is registered.
+
+3. Connect to the owned Azure host using restricted RDP. Use Hyper-V Manager /
+   VMConnect to the configured MIG01. Log on as its local Administrator.
+   It intentionally remains in a workgroup.
+
+4. Inside MIG01, open C:\HyperVLab\installer-path.txt to locate the extracted
+   Microsoft AzureMigrateInstaller.ps1. In elevated Windows PowerShell execute
+   that installer interactively. Review terms and choose HYPER-V, Azure public
+   cloud and your approved connectivity model. The repository never silently
+   chooses a scenario, clicks license acceptance or reruns an installed appliance.
+
+5. In the Azure portal, create/manage an Azure Migrate project with suitable
+   current Azure Migrate and Entra permissions. Choose Discover / Yes, with
+   Hyper-V. Generate the project key. Enter it directly in the appliance's
+   configuration manager, sign in and complete registration/prerequisite checks.
+   Never place a project key in this repo/config or a terminal command line.
+   These actions can create Azure resources and are not performed by this kit.
+
+6. Add the Hyper-V host at 192.168.100.1 (or configured prefix). The local
+   laboperator account is the host account, NOT a guest domain account. Use the
+   host's actual computer name with this account. The kit adds it to Hyper-V
+   Administrators, Remote Management Users and Performance Monitor Users and
+   limits WinRM inbound to the nested subnet. No wildcard TrustedHosts is set.
+   Follow current Microsoft documentation if a particular discovery setting
+   needs additional permissions; do not disable authentication or expose WinRM.
+
+7. Add the guest credentials separately for installed applications/dependency
+   analysis. The nested DOMAIN\Administrator credential is deliberately
+   lab-only and privileged; do not reuse it in a customer environment.
+   Optional SQL uses Windows authentication. Review current SQL permissions
+   separately for SQL assessment; a traffic-generator login is not an
+   assessment account.
+
+8. Open https://<configured-MIG01-IP>:44368 from the Azure host browser, or
+   use the appliance's local browser. The certificate warning/initial setup is
+   Microsoft's appliance flow. There is deliberately no public UI NSG rule or
+   NAT port mapping. Verify discovery and observed inventory in Azure Migrate.
+   The kit does not claim successful registration from an open TCP port.
+
+Nested networking caveat
+-----------------------
+Microsoft's standard appliance documentation describes an external Hyper-V
+switch. An Azure nested host instead uses an internal switch plus WinNAT because
+Azure does not permit the equivalent external-switch MAC-spoofing topology.
+This is an educational lab adaptation, not a claim of production appliance
+support for every nested/networking configuration. Validate appliance internet,
+DNS, host CIM/WinRM and guest access against current Microsoft requirements.
+
+The appliance may need outbound connectivity to more endpoints than login and
+management services. Consult the complete current Microsoft URL list; successful
+access to one URL does not prove all dependencies are reachable.
+
+Official references
+-------------------
+https://learn.microsoft.com/azure/migrate/tutorial-discover-hyper-v
+https://learn.microsoft.com/azure/migrate/deploy-appliance-script
+https://learn.microsoft.com/azure/migrate/migrate-appliance
+https://learn.microsoft.com/azure/migrate/migrate-support-matrix-hyper-v
+https://learn.microsoft.com/azure/migrate/prepare-azure-accounts
+
+License terms, download hashes, Azure roles and supported versions can change.
+Use current Microsoft references rather than assuming a copied hash/date is
+permanently authoritative.

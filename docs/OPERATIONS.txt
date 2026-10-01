@@ -1,0 +1,172 @@
+OPERATIONS AND VALIDATION
+========================
+
+Read-only/local commands
+-----------------------
+  .\Install.ps1 -Action Plan
+  .\Install.ps1 -Action Validate
+  .\tests\Test-Local.ps1
+  powershell.exe -NoProfile -File .\tests\Test-Local.ps1
+
+Validate without -Online runs local assertions after validating the chosen
+config. Tests may also be run directly before configuring any Azure values.
+They parse all scripts, exercise pure functions with synthetic values, block
+Azure calls, and test native error codes in a subprocess. A mocked lifecycle
+also exercises install/resume, repeat-safe local ACL setup, generated launcher
+execution against harmless file/task mocks with real task-action parameter
+positions, encrypted transport, unsafe what-if rejection and parameter-file
+cleanup. All files it creates contain synthetic test inputs under .runtime
+and are removed. No tests need Pester.
+
+When az bicep is already available, compile without authentication:
+  New-Item -ItemType Directory -Path .runtime -Force
+  az bicep build --file .\infra\main.bicep --outfile .\.runtime\main.bicep.json
+
+The Windows CI workflow runs offline PowerShell assertions and C# compilation;
+Bicep compile runs only if its CLI is preinstalled. CI never signs in, submits
+ARM deployments, starts Hyper-V guests or downloads proprietary media.
+
+Installation sequence
+---------------------
+  Config/license/approval checks
+  Missing CLI/Bicep prerequisite installation only with explicit consent
+  Local template compile, optional interactive login
+  Subscription/ownership/SKU/image/quota/media URL preflight
+  Secure password input and complexity checks
+  ARM validation + what-if; reject modify/delete of existing resources
+  Create dedicated tagged group and host if missing
+  Verify owned host, running state and ready Azure VM agent
+  Transfer allowlisted code/config and encrypted guest credential
+  Register/start exact SYSTEM startup task
+  Persistent managed disk identification/initialization
+  Install Hyper-V; persist reboot-required state; reboot only owned host
+  Resume -> internal switch/NAT -> verified media -> base -> guests
+  AD forest -> directory objects -> domain joins -> real workloads
+  Read-only validation -> LabReady or LabReady-ApplianceManualSetup
+
+Azure installation returns after scheduling, not after all guest setup.
+The Azure Run Command success sentinel confirms transport/launcher success,
+not the final lab health. Guest actions have separate explicit result
+envelopes; nonzero native exit codes are never treated as success.
+
+State and diagnostics
+---------------------
+On the Azure host:
+  C:\ProgramData\HyperVLab\<LabId>\state.json
+  C:\ProgramData\HyperVLab\<LabId>\events.jsonl
+  Task Scheduler: HyperVLab-<LabId>
+  L:\HyperVLab\<LabId>\Base
+  L:\HyperVLab\<LabId>\VMs
+
+Each state checkpoint is written by atomic file replacement after a successful
+step. Failed steps are not marked completed. Status, Step, ErrorType and
+ErrorCode identify the failure boundary. NativeExit:N and GuestFailure:Action
+are deliberately distinct; raw guest/native error output is not serialized.
+Use Windows Event Viewer, Azure deployment operation history and relevant
+role/service diagnostics locally for deeper investigation. Inspect/redact
+native Windows/SQL logs before sharing them; they are not publication artifacts.
+
+  .\Install.ps1 -Action Status
+  .\Install.ps1 -Action Status -GuestChecks -Approve
+  .\Install.ps1 -Action Validate -Online -GuestChecks -Approve
+
+Status with guest checks reports actual guest power and best-effort PowerShell
+Direct probes. Missing credentials, failed authentication, missing VM, stopped
+VM or unavailable probing is NOT marked healthy. For CLIENT01, health requires
+a fresh heartbeat from real TCP + HTTP + SMB I/O under the actual SYSTEM
+scheduled task (plus authenticated TDS when SQL enabled).
+
+Common failure boundaries
+------------------------
+Local config:
+  Replace all placeholders. /32 only, no credentials/unknown fields, supported
+  SKU, isolated .test domain, matching WIM edition/index and SHA256.
+
+Ownership/preflight:
+  Do not repoint at an existing production group/VM. A tagged same-config
+  partial deployment can resume, but unexpected resources, disk layout or
+  config drift are refused. Do not forge tags as an adoption workaround.
+  Quota is not capacity: allocation can still fail. Examine the exact Azure
+  deployment in the dedicated group/subscription.
+
+Host power/agent:
+  Only an already running, agent-ready host can receive commands. Start your
+  owned deallocated lab host explicitly. Nothing starts all subscription VMs.
+  A Hyper-V role reboot temporarily makes Status -GuestChecks unavailable.
+
+DataDisk:
+  SCSI uses portal LUN 0. NVMe remote Premium disks expose model
+  Virtual_Disk NVMe Premium and guest SCSI logical unit 1 for portal LUN 0.
+  Exact disk size, non-OS flags and saved UniqueId must match. L: must carry
+  the lab-specific label. Temporary NVMe disks are excluded even if same size.
+  Unexpected models/layouts fail closed; investigate rather than selecting
+  "the first RAW disk". Interrupted owned RAW/partition initialization resumes
+  only after the persisted identity matches. No existing unknown filesystem
+  is automatically reformatted.
+
+Media:
+  A HostFile ISO must already have been obtained, with rights/hash/index checked.
+  Stage it at the configured owned-host path if the pipeline stopped waiting.
+  A download hash/signature/redirect failure requires checking current official
+  media. Do not turn off validation. Wrong existing media is not overwritten.
+
+BaseImage:
+  Only a completed, hash-verified parent is consumed. Newly created VHDs get
+  GPT/EFI/MSR/Windows partitions using free drive letters. EFI directories,
+  bootmgfw.efi and bootx64.efi are explicitly verified/copied; the EFI type is
+  assigned after bcdboot. The historical source's UEFI boot fixes are retained.
+  If interrupted, only the kit's unattached building.vhdx may be rebuilt;
+  a completed parent with children is never overwritten.
+
+VM/domain:
+  The guest must boot to PowerShell Direct before networking/domain changes.
+  AD promotion/domain joins do not checkpoint until the expected post-reboot
+  state works. Host restarts rerun incomplete steps. Already owned guests may
+  be started; unrelated guests are not touched. A conflicting VM name or
+  partial unowned VM definition requires manual investigation, not forced
+  removal. A stalled OOBE requires VMConnect inspection and answer-file cleanup.
+
+Workloads:
+  No best-effort missing binary/listener is accepted as success.
+  SQL must use the full official SQL Express 2022 self-extracting offline media,
+  not SQL2022-SSEI-Expr.exe. Its extracted setup.exe must be signed. Installer
+  exits 0/3010 are handled separately; other exits stop the step. SQL instance
+  name is HVLAB, Windows authentication, fixed TCP 1433, restricted subnet.
+  If services or machine-domain authentication fail, CLIENT01 reports unhealthy.
+
+Appliance:
+  See APPLIANCE.txt. Staging is repeat-safe; Microsoft's interactive scenario
+  installer is never rerun automatically, and registration is always unverified
+  by the kit. Hyper-V Manager plus the host browser avoids public UI exposure.
+
+Restart/retirement
+------------------
+The host task and DPAPI credential survive a normal Azure host restart.
+Checkpoints live on the OS disk; VM/image data live on the managed data disk.
+Losing/replacing either disk is NOT supported as automatic disaster recovery.
+Back up your private config, guest credentials and any valuable lab data using
+your approved procedure. The immutable config fingerprint intentionally
+prevents automatic resizing/renaming/password rotation during resume.
+
+Daily shutdown and Windows updates can interrupt installation. Choose a
+suitable schedule beforehand, then restart the owned host and resume.
+There is no broad stop/start, cleanup or deletion automation. To retire the
+lab, manually verify its tags/resources and costs, preserve required data,
+then remove only the dedicated group using your approved Azure procedure.
+
+Official platform references
+----------------------------
+https://learn.microsoft.com/azure/virtual-machines/windows/nested-virtualization
+https://learn.microsoft.com/azure/virtual-machines/enable-nvme-remote-faqs
+https://learn.microsoft.com/azure/virtual-machines/enable-nvme-interface
+https://learn.microsoft.com/sql/database-engine/install-windows/install-sql-server-from-the-command-prompt
+https://www.microsoft.com/evalcenter/evaluate-windows-server-2022
+
+Integration release gate still outstanding
+-----------------------------------------
+Offline tests are not an end-to-end deployment certification. Before using
+this wrapper as a tested deployment release, perform an explicitly authorized
+run in a disposable subscription/group: provision each supported controller
+type, verify automatic reboot/resume, inject a failure before a checkpoint,
+resume, verify directory/workloads, check NAT/firewall boundaries, and complete
+optional SQL and Hyper-V appliance setup/registration. Retain redacted results.

@@ -1,0 +1,39 @@
+name: Offline validation
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  offline:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: PowerShell 7 assertions
+        shell: pwsh
+        run: .\tests\Test-Local.ps1
+      - name: Windows PowerShell 5.1 compatibility
+        shell: powershell
+        run: .\tests\Test-Local.ps1
+      - name: Compile demo with in-box .NET compiler
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path .runtime -Force | Out-Null
+          & "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\csc.exe" /nologo /target:exe /reference:System.Data.dll /out:.runtime\DependencyDemo.exe .\workloads\DependencyDemo.cs
+          if ($LASTEXITCODE -ne 0) { throw 'Compiler failure' }
+          & .\.runtime\DependencyDemo.exe --self-test
+          if ($LASTEXITCODE -ne 0) { throw 'Self-test failure' }
+      - name: Bicep compile when preinstalled
+        shell: pwsh
+        run: |
+          $available = $false
+          if (Get-Command az -ErrorAction SilentlyContinue) {
+            az bicep version --only-show-errors 2>$null
+            $available = $LASTEXITCODE -eq 0
+          }
+          if ($available) {
+            az bicep build --file .\infra\main.bicep --outfile .\.runtime\main.bicep.json --only-show-errors
+            if ($LASTEXITCODE -ne 0) { throw 'Bicep compile failed' }
+          } else {
+            Write-Host 'Bicep is not preinstalled; not downloading tools in offline CI.'
+          }

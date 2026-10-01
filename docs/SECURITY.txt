@@ -1,0 +1,88 @@
+TRUST AND SECRET LIFECYCLE
+=========================
+
+This is an isolated training lab, not a production security reference.
+No existing customer resource/VM is targeted. Every cloud operation is scoped
+to the explicit subscription, group and deterministic VM name; ownership tags
+and configuration hash must agree. Tags prevent accidental adoption, not an
+administrator intentionally forging ownership.
+
+Only Install/Deploy with -Approve can provision. -Login and dependency consent
+are separate. The host/guest code is transferred using an exact four-file
+allowlist plus validated non-secret config, gzip encoding and SHA256 checking.
+No recursive repository upload, local private config file, .git directory,
+generated binary, transcript, appliance key or inventory enters that package.
+
+The user supplies SecureString passwords interactively or via SecureString
+parameters. Do not put plaintext on command lines, in PowerShell history, in
+environment-variable dumps, in external transcripts, or in tracked files.
+The code does not use Start-Transcript and suppresses native command output
+that could include submitted parameter values. Logs contain structured step
+names/results, timestamps and safe error codes, not command arguments.
+
+First deployment:
+  ARM requires a secure adminPassword parameter. A short-lived plaintext
+  parameter JSON is placed inside the gitignored .runtime directory, whose
+  Windows ACL is restricted to the operator, Administrators and SYSTEM.
+  Only the filename (not password) appears in the Azure CLI command line.
+  ARM/Bicep declare the parameter secure. A finally block removes the file.
+  Sudden process termination can leave it behind: inspect/clean .runtime
+  manually. Deletion is not forensic erasure on SSD/cloud-synced storage.
+
+Guest credential transfer/resume:
+  The host creates a 3072-bit nonexportable local-machine certificate key.
+  Only its public key leaves the host. Guest password transfer uses
+  RSA-OAEP-SHA256 ciphertext, not a password argument in Run Command.
+  SYSTEM decrypts it on the host and Export-Clixml encrypts the PSCredential
+  using Windows DPAPI under SYSTEM. C:\ProgramData\HyperVLab\<LabId> and
+  L:\HyperVLab\<LabId> allow only SYSTEM/Administrators.
+  Individual Hyper-V VM identities additionally receive read permission on
+  the immutable, credential-free base image and access to their own child
+  VHDX; they are not granted access to other guests' disks or host credentials.
+  This file is NOT a vault. Local administrators/SYSTEM can recover secrets.
+  In-memory .NET strings cannot be guaranteed immediately erased.
+
+  credential.clixml and the certificate persist so unattended startup,
+  reruns and read-only guest validation work after a host reboot. They are
+  not portable backups. Do not reset the guest credential on a rerun.
+  To retire credential retention, first disable the exact HyperVLab-<LabId>
+  scheduled task, then remove its credential file and transport certificate
+  with your administrative procedure. Automatic resume/guest validation will
+  become unavailable. Preserve credentials securely if you need recovery.
+
+Unattended guest boot:
+  Windows first boot needs a plaintext administrator password in the guest's
+  unattend.xml. It exists only inside the protected VHDX, never in the upload
+  package. XML special characters are escaped. SetupComplete.cmd removes
+  known answer-file paths; the first PowerShell Direct network step repeats
+  cleanup. A stuck/failed OOBE may leave an answer file; restrict access and
+  inspect that guest. Windows setup diagnostics/backups/snapshots may retain
+  data. This workflow cannot promise zero plaintext traces or secure erasure.
+
+  The local guest password is reused for nested Administrator, DC domain
+  Administrator and DSRM, solely for a disposable lab. Host password must differ.
+  Three demo AD accounts are disabled, have no shared login passwords and no
+  elevated group membership. Workload tasks run as SYSTEM and use the machine's
+  domain identity for SMB and optional SQL, not a stored service-account password.
+
+Downloads:
+  Official Microsoft HTTPS hosts are allowlisted; media redirects must stay on
+  that list. Independently supplied SHA256 is mandatory before media use.
+  Azure CLI MSI, newly installed Bicep, SQL executables and the appliance
+  installer script additionally require valid Microsoft Authenticode signatures.
+  Media is not mirrored or bundled. Operator-provided ISO rights remain the
+  operator's responsibility. There is no unattended appliance license acceptance.
+
+Networking:
+  Azure public access is restricted RDP from one operator IPv4 /32.
+  No public WinRM, SMB, SQL, nested RDP or appliance UI opening is created.
+  Windows Firewall scope is restricted to the nested subnet for internal
+  workloads/remoting. NAT provides egress, not general external-switch bridging.
+  No wildcard TrustedHosts/CredSSP delegation or firewall disable is used.
+  NSG default rules and Windows role-provided rules still exist: this is not
+  a statement that the lab has "no firewall changes".
+
+If your local checkout is in OneDrive or another synchronized location, its
+ignored .runtime files can still be synchronized by that product. Gitignore
+does not control backup/sync. Before an actual install, use a nonsynchronized,
+access-controlled checkout consistent with your organization's policy.
