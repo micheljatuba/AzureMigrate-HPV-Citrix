@@ -11,10 +11,14 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - name: PowerShell 7 assertions
         shell: pwsh
-        run: .\tests\Test-Local.ps1
+        run: |
+          & (Join-Path $PSHOME 'pwsh.exe') -NoProfile -NonInteractive -File .\tests\Test-Local.ps1
+          if ($LASTEXITCODE -ne 0) { throw 'PowerShell 7 assertions failed' }
       - name: Windows PowerShell 5.1 compatibility
         shell: powershell
-        run: .\tests\Test-Local.ps1
+        run: |
+          & (Join-Path $PSHOME 'powershell.exe') -NoProfile -NonInteractive -File .\tests\Test-Local.ps1
+          if ($LASTEXITCODE -ne 0) { throw 'Windows PowerShell assertions failed' }
       - name: Compile demo with in-box .NET compiler
         shell: pwsh
         run: |
